@@ -140,7 +140,7 @@ export async function updateProduct(
   id: number,
   input: UpdateProductInput
 ): Promise<Product | null> {
-  const existing = await getProductById(id);
+  const existing = await getProductByIdFromDB(id);
   if (!existing) {
     return null;
   }
@@ -164,10 +164,20 @@ export async function updateProduct(
     [name, description, price, category, stock, id]
   );
 
-  return mapProductRow(result.rows[0]);
+  const product = mapProductRow(result.rows[0]);
+  await deleteProductsFromCache();
+  await deleteSingleProductFromCache(id);
+
+  return product;
 }
 
 async function deleteProductsFromCache(): Promise<void> {
   await redisClient.del(PRODUCTS_ALL_CACHE_KEY);
   console.log('All products erased from cache');
+}
+
+async function deleteSingleProductFromCache(productId: number): Promise<void> {
+  const cacheKey = getProductCacheKey(productId);
+  await redisClient.del(cacheKey);
+  console.log('Cache deleted. ID: ', productId);
 }
