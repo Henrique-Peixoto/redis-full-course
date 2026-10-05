@@ -1,4 +1,5 @@
 import { pool } from "../db/pool";
+import { redisClient } from "../redis/client";
 import {
   Product,
   ProductRow,
@@ -19,7 +20,48 @@ function mapProductRow(row: ProductRow): Product {
   };
 }
 
+const PRODUCTS_ALL_CACHE_KEY = 'products:all';
+const PRODUCTS_CACHE_TTL_SECONDS = 60;
+
+
 export async function getAllProducts(filters: {
+  category?: string;
+  search?: string;
+}): Promise<Product[]> {
+  const hasFilters = Boolean(filters?.category || filters?.search);
+
+  // Every filter combination need a different cache
+  // products:all:search:keyword
+  // products:all:category:accessories
+
+  if (hasFilters) {
+    console.log('Cache bypass: filtered product list');
+    return getAllProductsFromDB(filters);
+  }
+
+  // Redis is not the source of truth
+  const cachedProducts = await redisClient.get(PRODUCTS_ALL_CACHE_KEY);
+
+  if (cachedProducts) {
+    console.log('Cache hit: products:all');
+    return JSON.parse(cachedProducts) as Product[];
+  }
+
+  console.log('Cache miss: products:all');
+  const products = await getAllProductsFromDB(filters);
+
+  // Setting the data on cache
+  await redisClient.setEx(
+    PRODUCTS_ALL_CACHE_KEY, 
+    PRODUCTS_CACHE_TTL_SECONDS, 
+    JSON.stringify(products)
+  );
+
+  console.log('Cache set: products:all');
+  return products;
+}
+
+export async function getAllProductsFromDB(filters: {
   category?: string;
   search?: string;
 }): Promise<Product[]> {
