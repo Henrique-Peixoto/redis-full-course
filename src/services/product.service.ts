@@ -131,7 +131,9 @@ export async function createProduct(
     [input.name, input.description, input.price, input.category, input.stock]
   );
 
-  return mapProductRow(result.rows[0]);
+  const newlyCreatedProduct = mapProductRow(result.rows[0]);
+  await deleteProductsFromCache();
+  return newlyCreatedProduct;
 }
 
 export async function updateProduct(
@@ -163,4 +165,9 @@ export async function updateProduct(
   );
 
   return mapProductRow(result.rows[0]);
+}
+
+async function deleteProductsFromCache(): Promise<void> {
+  await redisClient.del(PRODUCTS_ALL_CACHE_KEY);
+  console.log('All products erased from cache');
 }
